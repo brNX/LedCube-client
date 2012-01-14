@@ -29,6 +29,36 @@ typedef struct _frame{
     layer layers[5];
 }frame;
 
+
+
+
+/*** Particles variables */
+typedef struct _particle{
+    int vx;
+    int vy;
+    int vz;
+    int x;
+    int y;
+    int z;
+    float ttl;
+}particle;
+
+#define MAXPARTICLES 20
+particle particles[MAXPARTICLES];
+int mat[6][6][6];
+
+
+int emitX = 0;
+int emitY = 0;
+int emitZ = 0;
+
+int centerX = 0;
+int centerY = 0;
+int centerZ = 0;
+
+///////
+float elapsed = 120;
+
 /* ------------------------------------------------------------------------- */
 
 static char *usbErrorMessage(int errCode)
@@ -116,6 +146,71 @@ int msleep(unsigned long milisec)
     return 1;
 }
 
+void initParticles(){
+    
+    for (int i=0;i<MAXPARTICLES;i++){
+            particles[i].ttl = 0;
+            particles[i].vx = 0;
+            particles[i].vy = 1;
+            particles[i].vz = 1;
+        }
+}
+
+void processParticles(int k){
+    //centerX = k % 5;
+    //centerY = k % 5;
+
+    /**** CREATE CUBE ******/
+    mat[centerX][centerY][centerZ] = 1;
+    mat[centerX+1][centerY][centerZ] = 1;
+    mat[centerX][centerY+1][centerZ] = 1;
+    mat[centerX+1][centerY+1][centerZ] = 1;
+    mat[centerX][centerY][centerZ+1] = 1;
+    mat[centerX+1][centerY][centerZ+1] = 1;
+    mat[centerX][centerY+1][centerZ+1] = 1;
+    mat[centerX+1][centerY+1][centerZ+1] = 1;
+
+
+    for (int i=0;i<MAXPARTICLES;i++){
+        particles[i].ttl = particles[i].ttl-1;
+
+        if (particles[i].ttl > 0){
+            particles[i].x += particles[i].vx;
+            particles[i].y += particles[i].vy;
+            particles[i].z += particles[i].vz;
+
+            if (    (centerX+particles[i].x < 5) 
+                    &&  (centerY+particles[i].y < 5) 
+                    &&  (centerZ+particles[i].z < 5)
+                    &&  (centerX+particles[i].x >= 0)
+                    &&  (centerY+particles[i].y >= 0)
+                    &&  (centerZ+particles[i].z >= 0)
+                    )
+                mat[centerX+particles[i].x][centerY+particles[i].y][centerZ+particles[i].z] = 1;
+        } else {
+            if (rand()%100 < 30){
+                particles[i].ttl = 5;
+                particles[i].x = emitX;
+                particles[i].y = emitY;
+                particles[i].z = emitZ;
+
+                particles[i].vx = rand()%3-1;
+                particles[i].vy = rand()%3-1;
+                particles[i].vz = rand()%3-1;
+
+                if (    (centerX+particles[i].x < 5) 
+                    &&  (centerY+particles[i].y < 5) 
+                    &&  (centerZ+particles[i].z < 5)
+                    &&  (centerX+particles[i].x >= 0)
+                    &&  (centerY+particles[i].y >= 0)
+                    &&  (centerZ+particles[i].z >= 0)
+                    )
+                    mat[centerX+particles[i].x][centerY+particles[i].y][centerZ+particles[i].z] = 1;
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     usbDevice_t *dev;
@@ -144,231 +239,84 @@ int main(int argc, char **argv)
         if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   /* add a dummy report ID */
             fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
     }else if(strcasecmp(argv[1], "loop") == 0){
-
+        
 
         frame ledframe;
-        int numlayer = 0;
 
-        for(int i=0; i< 50 ;i++){
+        initParticles();
+        
 
-            memset(buffer,0,sizeof(buffer));
-            memset(&ledframe,0,sizeof(ledframe));
+        int k = 0;
+        while(++k){
 
-            for(int j=0;j<5;j++){
-                ledframe.layers[j].index=(1<<j);
+            if (elapsed > 50){
+
+                /****** CLEAN MATRIX ******/
+                for(int x=0;x<5;x++)
+                    for(int y=0;y<5;y++)
+                        for(int z=0;z<5;z++)
+                            mat[x][y][z] = 0;
+                
+
+                /******* DRAW STUFF *******/
+                processParticles(k);
+                        
+                
+                elapsed = 0;
             }
 
-            ledframe.layers[numlayer].row0 = 0x1F;
-            ledframe.layers[numlayer].row1 = 0x1F;
-            ledframe.layers[numlayer].row2 = 0x1F;
-            ledframe.layers[numlayer].row3 = 0x1F;
-            ledframe.layers[numlayer].row4 = 0x1F;
-
-            buffer[0]=0;
-            memcpy(buffer+1,&ledframe,sizeof(ledframe));
-            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
-                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
-
-            numlayer=(numlayer +1) % 5;
-            msleep(50);
-
-        }
-
-        numlayer = 0;
-
-        for(int i=0; i< 50 ;i++){
-
+            
             memset(buffer,0,sizeof(buffer));
             memset(&ledframe,0,sizeof(ledframe));
+            /// ----- LAYER
+            for(int x=0; x< 5 ;x++){
+                
+            
+                for(int j=0;j<5;j++){
+                    ledframe.layers[j].index=(1<<j);
+                }
 
-            for(int j=0;j<5;j++){
-                ledframe.layers[j].index=(1<<j);
-                switch (numlayer){
-                case 0:
-                    ledframe.layers[j].row0=0x1F;
-                    break;
-                case 1:
-                    ledframe.layers[j].row1=0x1F;
-                    break;
-                case 2:
-                    ledframe.layers[j].row2=0x1F;
-                    break;
-                case 3:
-                    ledframe.layers[j].row3=0x1F;
-                    break;
-                case 4:
-                    ledframe.layers[j].row4=0x1F;
-                    break;
+                for (int y=0;y<5;y++){
+                    for (int z=0;z<5;z++){
+
+                        switch(y){
+                            case 0:
+                                ledframe.layers[x].row0 |= mat[y][x][z];
+                                if (z != 4)
+                                    ledframe.layers[x].row0 <<= 1;
+                            break;
+                            case 1:
+                                ledframe.layers[x].row1 |= mat[y][x][z];
+                                if (z != 4)
+                                    ledframe.layers[x].row1 <<= 1;
+                            break;
+                            case 2:
+                                ledframe.layers[x].row2 |= mat[y][x][z];
+                                if (z != 4)
+                                    ledframe.layers[x].row2 <<= 1;
+                            break;
+                            case 3:
+                                ledframe.layers[x].row3 |= mat[y][x][z];
+                                if (z != 4)
+                                    ledframe.layers[x].row3 <<= 1;
+                            break;
+                            case 4:
+                                ledframe.layers[x].row4 |= mat[y][x][z];
+                                if (z != 4)
+                                    ledframe.layers[x].row4 <<= 1;
+                            break;
+                        }
+                    }
+                    
                 }
             }
-
             buffer[0]=0;
             memcpy(buffer+1,&ledframe,sizeof(ledframe));
             if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
                 fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
-
-            numlayer=(numlayer +1) % 5;
+                
             msleep(80);
-
-        }
-
-        numlayer = 4;
-
-        for(int i=0; i< 50 ;i++){
-
-            memset(buffer,0,sizeof(buffer));
-            memset(&ledframe,0,sizeof(ledframe));
-
-            for(int j=0;j<5;j++){
-                ledframe.layers[j].index=(1<<j);
-            }
-
-            ledframe.layers[numlayer].row0 = 0x1F;
-            ledframe.layers[numlayer].row1 = 0x1F;
-            ledframe.layers[numlayer].row2 = 0x1F;
-            ledframe.layers[numlayer].row3 = 0x1F;
-            ledframe.layers[numlayer].row4 = 0x1F;
-
-            buffer[0]=0;
-            memcpy(buffer+1,&ledframe,sizeof(ledframe));
-            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
-                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
-
-            numlayer--;
-            if (numlayer== -1)
-                numlayer = 4;
-            msleep(80);
-
-        }
-
-        numlayer = 4;
-
-        for(int i=0; i< 50 ;i++){
-
-            memset(buffer,0,sizeof(buffer));
-            memset(&ledframe,0,sizeof(ledframe));
-
-            for(int j=0;j<5;j++){
-                ledframe.layers[j].index=(1<<j);
-                switch (numlayer){
-                case 0:
-                    ledframe.layers[j].row0=0x1F;
-                    break;
-                case 1:
-                    ledframe.layers[j].row1=0x1F;
-                    break;
-                case 2:
-                    ledframe.layers[j].row2=0x1F;
-                    break;
-                case 3:
-                    ledframe.layers[j].row3=0x1F;
-                    break;
-                case 4:
-                    ledframe.layers[j].row4=0x1F;
-                    break;
-                }
-            }
-
-            buffer[0]=0;
-            memcpy(buffer+1,&ledframe,sizeof(ledframe));
-            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
-                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
-
-            numlayer--;
-            if (numlayer== -1)
-                numlayer = 4;
-            msleep(80);
-
-        }
-
-        frame turn[4];
-        memset(&turn,0,sizeof(frame)*4);
-        for(int j=0;j<5;j++){
-            turn[0].layers[j].index=(1<<j);
-            turn[1].layers[j].index=(1<<j);
-            turn[2].layers[j].index=(1<<j);
-            turn[3].layers[j].index=(1<<j);
-        }
-
-        /*
-
-                  *
-                  *
-                  *
-                  *
-                  *
-
-                  */
-        for(int j=0;j<5;j++){
-            turn[0].layers[j].row0=(1<<2);
-            turn[0].layers[j].row1=(1<<2);
-            turn[0].layers[j].row2=(1<<2);
-            turn[0].layers[j].row3=(1<<2);
-            turn[0].layers[j].row4=(1<<2);
-        }
-
-        /*
-
-                 *
-                  *
-                   *
-                    *
-                     *
-
-                  */
-
-        for(int j=0;j<5;j++){
-            turn[1].layers[j].row0=(1<<4);
-            turn[1].layers[j].row1=(1<<3);
-            turn[1].layers[j].row2=(1<<2);
-            turn[1].layers[j].row3=(1<<1);
-            turn[1].layers[j].row4=(1<<0);
-        }
-
-        /*
-
-
-                * * * * *
-
-
-                  */
-        for(int j=0;j<5;j++){
-            turn[2].layers[j].row2=0x1F;
-        }
-
-        /*
-
-                     *
-                    *
-                   *
-                  *
-                 *
-
-                  */
-
-        for(int j=0;j<5;j++){
-            turn[3].layers[j].row0=(1<<0);
-            turn[3].layers[j].row1=(1<<1);
-            turn[3].layers[j].row2=(1<<2);
-            turn[3].layers[j].row3=(1<<3);
-            turn[3].layers[j].row4=(1<<4);
-        }
-
-
-
-        numlayer = 0;
-        for(int i=0; i< 50 ;i++){
-
-            memset(buffer,0,sizeof(buffer));
-
-            buffer[0]=0;
-            memcpy(buffer+1,&turn[numlayer],sizeof(frame));
-            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
-                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
-
-            numlayer=(numlayer+1)%4;
-            msleep(110);
-
+            elapsed += 80;
         }
 
 
