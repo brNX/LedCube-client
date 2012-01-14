@@ -12,9 +12,14 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <stdint.h>
 #include "hiddata.h"
 #include "usbconfig.h"  /* for device VID, PID, vendor name and product name */
+
+#define ANIMATION_WALLS 0
+#define ANIMATION_NOISE 1
+#define ANIMATION_CROSS 2
 
 typedef struct _layer{
     unsigned int row0 : 5;
@@ -28,6 +33,19 @@ typedef struct _layer{
 typedef struct _frame{
     layer layers[5];
 }frame;
+
+typedef struct _animation{
+	int currentFrame;
+	int length;
+	frame *frames;
+}animation;
+
+frame get_next_frame(animation *a);
+void initAnimations();
+void runAnimation(); //To run on separate thread
+
+animation animations[3];
+animation anim;
 
 /* ------------------------------------------------------------------------- */
 
@@ -116,12 +134,16 @@ int msleep(unsigned long milisec)
     return 1;
 }
 
+void fill_random_noise(frame *f);
+
+char        buffer[21];    /* room for dummy report ID */
+  usbDevice_t *dev;
+       int         err;
+
+
 int main(int argc, char **argv)
 {
-    usbDevice_t *dev;
-    char        buffer[21];    /* room for dummy report ID */
-    int         err;
-
+  
     if(argc < 2){
         usage(argv[0]);
         exit(1);
@@ -371,13 +393,186 @@ int main(int argc, char **argv)
 
         }
 
+    }else if(strcasecmp(argv[1], "noise") == 0){
+				frame noise;
+				memset(&noise, 0, sizeof(noise));
+				while(1){
+					fill_random_noise(&noise);
+					memset(buffer,0,sizeof(buffer));
 
-    }else{
+            buffer[0]=0;
+            memcpy(buffer+1,&noise,sizeof(frame));
+            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
+                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
+
+            msleep(100);
+				}
+		}else if(strcasecmp(argv[1], "animation") == 0){
+				initAnimations();
+				pthread_t anim_thread;
+				int threadId;
+				int anim_id = 0;
+				anim = animations[0]; //FIXME - debug only
+				
+				threadId = pthread_create(&anim_thread, NULL, &runAnimation, NULL);
+				
+				while(1){
+					char c = getchar();
+					
+					if(c != '\n'){
+						anim_id = (anim_id + 1) % 3;
+						anim = animations[anim_id];
+
+					}
+				}
+
+				pthread_join( anim_thread, NULL );
+
+		}else{
         usage(argv[0]);
         exit(1);
     }
     usbhidCloseDevice(dev);
     return 0;
+}
+
+void runAnimation(){
+	while(1){
+					frame f = get_next_frame(&anim);
+					memset(buffer,0,sizeof(buffer));
+
+            buffer[0]=0;
+            memcpy(buffer+1,&f,sizeof(frame));
+            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
+                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
+
+            msleep(100);
+				}
+
+	exit(0);
+
+}
+
+void initAnimations(){
+	animations[0].length = 4;
+	animations[0].frames = (frame*)malloc(sizeof(frame)*4);
+	
+	/*BEGIN -ANIMATION_WALL*/
+	//Frame 0
+	for(int l=0;l<5;l++){
+		animations[0].frames[0].layers[l].index = (1<<l);
+		animations[0].frames[0].layers[l].row0 = 0x11;
+		animations[0].frames[0].layers[l].row1 = 0x00;
+		animations[0].frames[0].layers[l].row2 = 0x00;
+		animations[0].frames[0].layers[l].row3 = 0x00;
+		animations[0].frames[0].layers[l].row4 = 0x11;
+	}
+
+		//Frame 1
+	for(int l=0;l<5;l++){
+		animations[0].frames[1].layers[l].index = (1<<l);
+		animations[0].frames[1].layers[l].row0 = 0x08;
+		animations[0].frames[1].layers[l].row1 = 0x01;
+		animations[0].frames[1].layers[l].row2 = 0x00;
+		animations[0].frames[1].layers[l].row3 = 0x10;
+		animations[0].frames[1].layers[l].row4 = 0x02;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[0].frames[2].layers[l].index = (1<<l);
+		animations[0].frames[2].layers[l].row0 = 0x04;
+		animations[0].frames[2].layers[l].row1 = 0x00;
+		animations[0].frames[2].layers[l].row2 = 0x11;
+		animations[0].frames[2].layers[l].row3 = 0x00;
+		animations[0].frames[2].layers[l].row4 = 0x04;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[0].frames[3].layers[l].index = (1<<l);
+		animations[0].frames[3].layers[l].row0 = 0x02;
+		animations[0].frames[3].layers[l].row1 = 0x10;
+		animations[0].frames[3].layers[l].row2 = 0x00;
+		animations[0].frames[3].layers[l].row3 = 0x01;
+		animations[0].frames[3].layers[l].row4 = 0x08;
+	}
+	/*END ANIMATION_WALL*/
+	
+	/*BEGIN ANIMATION_NOISE */
+	frame noise;
+	memset(&noise, 0, sizeof(noise));
+	animations[1].frames = (frame*)malloc(sizeof(frame)*5);
+	animations[1].length = 5;
+
+			for(int i=0; i<5; i++){
+					fill_random_noise(&noise);
+					animations[1].frames[i] = noise;
+				}
+
+	animations[2].length = 4;
+	animations[2].frames = (frame*)malloc(sizeof(frame)*4);
+	/*BEGIN -ANIMATION_WALL*/
+	//Frame 0
+	for(int l=0;l<5;l++){
+		animations[2].frames[0].layers[l].index = (1<<l);
+		animations[2].frames[0].layers[l].row0 = 0x11;
+		animations[2].frames[0].layers[l].row1 = 0x0A;
+		animations[2].frames[0].layers[l].row2 = 0x04;
+		animations[2].frames[0].layers[l].row3 = 0x0A;
+		animations[2].frames[0].layers[l].row4 = 0x11;
+	}
+
+		//Frame 1
+	for(int l=0;l<5;l++){
+		animations[2].frames[1].layers[l].index = (1<<l);
+		animations[2].frames[1].layers[l].row0 = 0x08;
+		animations[2].frames[1].layers[l].row1 = 0x05;
+		animations[2].frames[1].layers[l].row2 = 0x0E;
+		animations[2].frames[1].layers[l].row3 = 0x14;
+		animations[2].frames[1].layers[l].row4 = 0x02;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[2].frames[2].layers[l].index = (1<<l);
+		animations[2].frames[2].layers[l].row0 = 0x04;
+		animations[2].frames[2].layers[l].row1 = 0x04;
+		animations[2].frames[2].layers[l].row2 = 0x1F;
+		animations[2].frames[2].layers[l].row3 = 0x04;
+		animations[2].frames[2].layers[l].row4 = 0x04;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[2].frames[3].layers[l].index = (1<<l);
+		animations[2].frames[3].layers[l].row0 = 0x02;
+		animations[2].frames[3].layers[l].row1 = 0x14;
+		animations[2].frames[3].layers[l].row2 = 0x0E;
+		animations[2].frames[3].layers[l].row3 = 0x05;
+		animations[2].frames[3].layers[l].row4 = 0x08;
+	}
+	/*END ANIMATION_WALL*/
+
+
+}
+
+frame get_next_frame(animation *a){
+	int index = (a->currentFrame + 1) % a->length;
+	a->currentFrame = index;
+
+	return a->frames[index];
+}
+
+void fill_random_noise(frame *f){
+	for(int i=0;i<5;i++){
+		f->layers[i].index = (1<<i);
+		f->layers[i].row0 = (random()*1000) % 0x1F;
+		f->layers[i].row1 = (random()*1000) % 0x1F;
+		f->layers[i].row2 = (random()*1000) % 0x1F;
+		f->layers[i].row3 = (random()*1000) % 0x1F;
+		f->layers[i].row4 = (random()*1000) % 0x1F;
+	}
 }
 
 /* ------------------------------------------------------------------------- */
