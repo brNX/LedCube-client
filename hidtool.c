@@ -19,6 +19,7 @@
 
 #define ANIMATION_WALLS 0
 #define ANIMATION_NOISE 1
+#define ANIMATION_CROSS 2
 
 typedef struct _layer{
     unsigned int row0 : 5;
@@ -43,7 +44,7 @@ frame get_next_frame(animation *a);
 void initAnimations();
 void runAnimation(); //To run on separate thread
 
-animation animations[2];
+animation animations[3];
 animation anim;
 
 /* ------------------------------------------------------------------------- */
@@ -419,7 +420,7 @@ int main(int argc, char **argv)
 					char c = getchar();
 					
 					if(c != '\n'){
-						anim_id = (anim_id + 1) % 2;
+						anim_id = (anim_id + 1) % 3;
 						anim = animations[anim_id];
 
 					}
@@ -508,6 +509,51 @@ void initAnimations(){
 					fill_random_noise(&noise);
 					animations[1].frames[i] = noise;
 				}
+
+	animations[2].length = 4;
+	animations[2].frames = (frame*)malloc(sizeof(frame)*4);
+	/*BEGIN -ANIMATION_WALL*/
+	//Frame 0
+	for(int l=0;l<5;l++){
+		animations[2].frames[0].layers[l].index = (1<<l);
+		animations[2].frames[0].layers[l].row0 = 0x11;
+		animations[2].frames[0].layers[l].row1 = 0x0A;
+		animations[2].frames[0].layers[l].row2 = 0x04;
+		animations[2].frames[0].layers[l].row3 = 0x0A;
+		animations[2].frames[0].layers[l].row4 = 0x11;
+	}
+
+		//Frame 1
+	for(int l=0;l<5;l++){
+		animations[2].frames[1].layers[l].index = (1<<l);
+		animations[2].frames[1].layers[l].row0 = 0x08;
+		animations[2].frames[1].layers[l].row1 = 0x05;
+		animations[2].frames[1].layers[l].row2 = 0x0E;
+		animations[2].frames[1].layers[l].row3 = 0x14;
+		animations[2].frames[1].layers[l].row4 = 0x02;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[2].frames[2].layers[l].index = (1<<l);
+		animations[2].frames[2].layers[l].row0 = 0x04;
+		animations[2].frames[2].layers[l].row1 = 0x04;
+		animations[2].frames[2].layers[l].row2 = 0x1F;
+		animations[2].frames[2].layers[l].row3 = 0x04;
+		animations[2].frames[2].layers[l].row4 = 0x04;
+	}
+
+			//Frame 2
+	for(int l=0;l<5;l++){
+		animations[2].frames[3].layers[l].index = (1<<l);
+		animations[2].frames[3].layers[l].row0 = 0x02;
+		animations[2].frames[3].layers[l].row1 = 0x14;
+		animations[2].frames[3].layers[l].row2 = 0x0E;
+		animations[2].frames[3].layers[l].row3 = 0x05;
+		animations[2].frames[3].layers[l].row4 = 0x08;
+	}
+	/*END ANIMATION_WALL*/
+
 
 }
 
