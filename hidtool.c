@@ -34,10 +34,11 @@ typedef struct _frame{
     layer layers[5];
 }frame;
 
+
 typedef struct _animation{
-	int currentFrame;
-	int length;
-	frame *frames;
+    int currentFrame;
+    int length;
+    frame *frames;
 }animation;
 
 frame get_next_frame(animation *a);
@@ -46,6 +47,34 @@ void runAnimation(); //To run on separate thread
 
 animation animations[3];
 animation anim;
+
+
+/*** Particles variables */
+typedef struct _particle{
+    int vx;
+    int vy;
+    int vz;
+    int x;
+    int y;
+    int z;
+    float ttl;
+}particle;
+
+#define MAXPARTICLES 20
+particle particles[MAXPARTICLES];
+int mat[6][6][6];
+
+
+int emitX = 0;
+int emitY = 0;
+int emitZ = 0;
+
+int centerX = 0;
+int centerY = 0;
+int centerZ = 0;
+
+///////
+float elapsed = 120;
 
 /* ------------------------------------------------------------------------- */
 
@@ -134,16 +163,18 @@ int msleep(unsigned long milisec)
     return 1;
 }
 
+
 void fill_random_noise(frame *f);
+void initParticles();
+void processParticles(int k);
 
 char        buffer[21];    /* room for dummy report ID */
-  usbDevice_t *dev;
-       int         err;
-
+usbDevice_t *dev;
+int         err;
 
 int main(int argc, char **argv)
 {
-  
+
     if(argc < 2){
         usage(argv[0]);
         exit(1);
@@ -165,9 +196,8 @@ int main(int argc, char **argv)
         }
         if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   /* add a dummy report ID */
             fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
+
     }else if(strcasecmp(argv[1], "loop") == 0){
-
-
         frame ledframe;
         int numlayer = 0;
 
@@ -314,13 +344,13 @@ int main(int argc, char **argv)
 
         /*
 
-                  *
-                  *
-                  *
-                  *
-                  *
+                          *
+                          *
+                          *
+                          *
+                          *
 
-                  */
+                          */
         for(int j=0;j<5;j++){
             turn[0].layers[j].row0=(1<<2);
             turn[0].layers[j].row1=(1<<2);
@@ -331,13 +361,13 @@ int main(int argc, char **argv)
 
         /*
 
-                 *
-                  *
-                   *
-                    *
-                     *
+                         *
+                          *
+                           *
+                            *
+                             *
 
-                  */
+                          */
 
         for(int j=0;j<5;j++){
             turn[1].layers[j].row0=(1<<4);
@@ -350,23 +380,23 @@ int main(int argc, char **argv)
         /*
 
 
-                * * * * *
+                        * * * * *
 
 
-                  */
+                          */
         for(int j=0;j<5;j++){
             turn[2].layers[j].row2=0x1F;
         }
 
         /*
 
-                     *
-                    *
-                   *
-                  *
-                 *
+                             *
+                            *
+                           *
+                          *
+                         *
 
-                  */
+                          */
 
         for(int j=0;j<5;j++){
             turn[3].layers[j].row0=(1<<0);
@@ -392,13 +422,93 @@ int main(int argc, char **argv)
             msleep(110);
 
         }
+    }else if(strcasecmp(argv[1], "particles") == 0){
+        
+
+        frame ledframe;
+
+        initParticles();
+        
+
+        int k = 0;
+        while(++k){
+
+            if (elapsed > 50){
+
+                /****** CLEAN MATRIX ******/
+                for(int x=0;x<5;x++)
+                    for(int y=0;y<5;y++)
+                        for(int z=0;z<5;z++)
+                            mat[x][y][z] = 0;
+                
+
+                /******* DRAW STUFF *******/
+                processParticles(k);
+
+                
+                elapsed = 0;
+            }
+
+            
+            memset(buffer,0,sizeof(buffer));
+            memset(&ledframe,0,sizeof(ledframe));
+            /// ----- LAYER
+            for(int x=0; x< 5 ;x++){
+                
+
+                for(int j=0;j<5;j++){
+                    ledframe.layers[j].index=(1<<j);
+                }
+
+                for (int y=0;y<5;y++){
+                    for (int z=0;z<5;z++){
+
+                        switch(y){
+                        case 0:
+                            ledframe.layers[x].row0 |= mat[y][x][z];
+                            if (z != 4)
+                                ledframe.layers[x].row0 <<= 1;
+                            break;
+                        case 1:
+                            ledframe.layers[x].row1 |= mat[y][x][z];
+                            if (z != 4)
+                                ledframe.layers[x].row1 <<= 1;
+                            break;
+                        case 2:
+                            ledframe.layers[x].row2 |= mat[y][x][z];
+                            if (z != 4)
+                                ledframe.layers[x].row2 <<= 1;
+                            break;
+                        case 3:
+                            ledframe.layers[x].row3 |= mat[y][x][z];
+                            if (z != 4)
+                                ledframe.layers[x].row3 <<= 1;
+                            break;
+                        case 4:
+                            ledframe.layers[x].row4 |= mat[y][x][z];
+                            if (z != 4)
+                                ledframe.layers[x].row4 <<= 1;
+                            break;
+                        }
+                    }
+                    
+                }
+            }
+            buffer[0]=0;
+            memcpy(buffer+1,&ledframe,sizeof(ledframe));
+            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
+                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
+
+            msleep(80);
+            elapsed += 80;
+        }
 
     }else if(strcasecmp(argv[1], "noise") == 0){
-				frame noise;
-				memset(&noise, 0, sizeof(noise));
-				while(1){
-					fill_random_noise(&noise);
-					memset(buffer,0,sizeof(buffer));
+        frame noise;
+        memset(&noise, 0, sizeof(noise));
+        while(1){
+            fill_random_noise(&noise);
+            memset(buffer,0,sizeof(buffer));
 
             buffer[0]=0;
             memcpy(buffer+1,&noise,sizeof(frame));
@@ -406,29 +516,29 @@ int main(int argc, char **argv)
                 fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
 
             msleep(100);
-				}
-		}else if(strcasecmp(argv[1], "animation") == 0){
-				initAnimations();
-				pthread_t anim_thread;
-				int threadId;
-				int anim_id = 0;
-				anim = animations[0]; //FIXME - debug only
-				
-				threadId = pthread_create(&anim_thread, NULL, &runAnimation, NULL);
-				
-				while(1){
-					char c = getchar();
-					
-					if(c != '\n'){
-						anim_id = (anim_id + 1) % 3;
-						anim = animations[anim_id];
+        }
+    }else if(strcasecmp(argv[1], "animation") == 0){
+        initAnimations();
+        pthread_t anim_thread;
+        int threadId;
+        int anim_id = 0;
+        anim = animations[0]; //FIXME - debug only
 
-					}
-				}
+        threadId = pthread_create(&anim_thread, NULL, &runAnimation, NULL);
 
-				pthread_join( anim_thread, NULL );
+        while(1){
+            char c = getchar();
 
-		}else{
+            if(c != '\n'){
+                anim_id = (anim_id + 1) % 3;
+                anim = animations[anim_id];
+
+            }
+        }
+
+        pthread_join( anim_thread, NULL );
+
+    }else{
         usage(argv[0]);
         exit(1);
     }
@@ -437,142 +547,207 @@ int main(int argc, char **argv)
 }
 
 void runAnimation(){
-	while(1){
-					frame f = get_next_frame(&anim);
-					memset(buffer,0,sizeof(buffer));
+    while(1){
+        frame f = get_next_frame(&anim);
+        memset(buffer,0,sizeof(buffer));
 
-            buffer[0]=0;
-            memcpy(buffer+1,&f,sizeof(frame));
-            if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
-                fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
+        buffer[0]=0;
+        memcpy(buffer+1,&f,sizeof(frame));
+        if((err = usbhidSetReport(dev, buffer, sizeof(buffer))) != 0)   // add a dummy report ID
+            fprintf(stderr, "error writing data: %s\n", usbErrorMessage(err));
 
-            msleep(100);
-				}
+        msleep(100);
+    }
 
-	exit(0);
+    exit(0);
 
 }
 
 void initAnimations(){
-	animations[0].length = 4;
-	animations[0].frames = (frame*)malloc(sizeof(frame)*4);
-	
-	/*BEGIN -ANIMATION_WALL*/
-	//Frame 0
-	for(int l=0;l<5;l++){
-		animations[0].frames[0].layers[l].index = (1<<l);
-		animations[0].frames[0].layers[l].row0 = 0x11;
-		animations[0].frames[0].layers[l].row1 = 0x00;
-		animations[0].frames[0].layers[l].row2 = 0x00;
-		animations[0].frames[0].layers[l].row3 = 0x00;
-		animations[0].frames[0].layers[l].row4 = 0x11;
-	}
+    animations[0].length = 4;
+    animations[0].frames = (frame*)malloc(sizeof(frame)*4);
 
-		//Frame 1
-	for(int l=0;l<5;l++){
-		animations[0].frames[1].layers[l].index = (1<<l);
-		animations[0].frames[1].layers[l].row0 = 0x08;
-		animations[0].frames[1].layers[l].row1 = 0x01;
-		animations[0].frames[1].layers[l].row2 = 0x00;
-		animations[0].frames[1].layers[l].row3 = 0x10;
-		animations[0].frames[1].layers[l].row4 = 0x02;
-	}
+    /*BEGIN -ANIMATION_WALL*/
+    //Frame 0
+    for(int l=0;l<5;l++){
+        animations[0].frames[0].layers[l].index = (1<<l);
+        animations[0].frames[0].layers[l].row0 = 0x11;
+        animations[0].frames[0].layers[l].row1 = 0x00;
+        animations[0].frames[0].layers[l].row2 = 0x00;
+        animations[0].frames[0].layers[l].row3 = 0x00;
+        animations[0].frames[0].layers[l].row4 = 0x11;
+    }
 
-			//Frame 2
-	for(int l=0;l<5;l++){
-		animations[0].frames[2].layers[l].index = (1<<l);
-		animations[0].frames[2].layers[l].row0 = 0x04;
-		animations[0].frames[2].layers[l].row1 = 0x00;
-		animations[0].frames[2].layers[l].row2 = 0x11;
-		animations[0].frames[2].layers[l].row3 = 0x00;
-		animations[0].frames[2].layers[l].row4 = 0x04;
-	}
+    //Frame 1
+    for(int l=0;l<5;l++){
+        animations[0].frames[1].layers[l].index = (1<<l);
+        animations[0].frames[1].layers[l].row0 = 0x08;
+        animations[0].frames[1].layers[l].row1 = 0x01;
+        animations[0].frames[1].layers[l].row2 = 0x00;
+        animations[0].frames[1].layers[l].row3 = 0x10;
+        animations[0].frames[1].layers[l].row4 = 0x02;
+    }
 
-			//Frame 2
-	for(int l=0;l<5;l++){
-		animations[0].frames[3].layers[l].index = (1<<l);
-		animations[0].frames[3].layers[l].row0 = 0x02;
-		animations[0].frames[3].layers[l].row1 = 0x10;
-		animations[0].frames[3].layers[l].row2 = 0x00;
-		animations[0].frames[3].layers[l].row3 = 0x01;
-		animations[0].frames[3].layers[l].row4 = 0x08;
-	}
-	/*END ANIMATION_WALL*/
-	
-	/*BEGIN ANIMATION_NOISE */
-	frame noise;
-	memset(&noise, 0, sizeof(noise));
-	animations[1].frames = (frame*)malloc(sizeof(frame)*5);
-	animations[1].length = 5;
+    //Frame 2
+    for(int l=0;l<5;l++){
+        animations[0].frames[2].layers[l].index = (1<<l);
+        animations[0].frames[2].layers[l].row0 = 0x04;
+        animations[0].frames[2].layers[l].row1 = 0x00;
+        animations[0].frames[2].layers[l].row2 = 0x11;
+        animations[0].frames[2].layers[l].row3 = 0x00;
+        animations[0].frames[2].layers[l].row4 = 0x04;
+    }
 
-			for(int i=0; i<5; i++){
-					fill_random_noise(&noise);
-					animations[1].frames[i] = noise;
-				}
+    //Frame 2
+    for(int l=0;l<5;l++){
+        animations[0].frames[3].layers[l].index = (1<<l);
+        animations[0].frames[3].layers[l].row0 = 0x02;
+        animations[0].frames[3].layers[l].row1 = 0x10;
+        animations[0].frames[3].layers[l].row2 = 0x00;
+        animations[0].frames[3].layers[l].row3 = 0x01;
+        animations[0].frames[3].layers[l].row4 = 0x08;
+    }
+    /*END ANIMATION_WALL*/
 
-	animations[2].length = 4;
-	animations[2].frames = (frame*)malloc(sizeof(frame)*4);
-	/*BEGIN -ANIMATION_WALL*/
-	//Frame 0
-	for(int l=0;l<5;l++){
-		animations[2].frames[0].layers[l].index = (1<<l);
-		animations[2].frames[0].layers[l].row0 = 0x11;
-		animations[2].frames[0].layers[l].row1 = 0x0A;
-		animations[2].frames[0].layers[l].row2 = 0x04;
-		animations[2].frames[0].layers[l].row3 = 0x0A;
-		animations[2].frames[0].layers[l].row4 = 0x11;
-	}
+    /*BEGIN ANIMATION_NOISE */
+    frame noise;
+    memset(&noise, 0, sizeof(noise));
+    animations[1].frames = (frame*)malloc(sizeof(frame)*5);
+    animations[1].length = 5;
 
-		//Frame 1
-	for(int l=0;l<5;l++){
-		animations[2].frames[1].layers[l].index = (1<<l);
-		animations[2].frames[1].layers[l].row0 = 0x08;
-		animations[2].frames[1].layers[l].row1 = 0x05;
-		animations[2].frames[1].layers[l].row2 = 0x0E;
-		animations[2].frames[1].layers[l].row3 = 0x14;
-		animations[2].frames[1].layers[l].row4 = 0x02;
-	}
+    for(int i=0; i<5; i++){
+        fill_random_noise(&noise);
+        animations[1].frames[i] = noise;
+    }
 
-			//Frame 2
-	for(int l=0;l<5;l++){
-		animations[2].frames[2].layers[l].index = (1<<l);
-		animations[2].frames[2].layers[l].row0 = 0x04;
-		animations[2].frames[2].layers[l].row1 = 0x04;
-		animations[2].frames[2].layers[l].row2 = 0x1F;
-		animations[2].frames[2].layers[l].row3 = 0x04;
-		animations[2].frames[2].layers[l].row4 = 0x04;
-	}
+    animations[2].length = 4;
+    animations[2].frames = (frame*)malloc(sizeof(frame)*4);
+    /*BEGIN -ANIMATION_WALL*/
+    //Frame 0
+    for(int l=0;l<5;l++){
+        animations[2].frames[0].layers[l].index = (1<<l);
+        animations[2].frames[0].layers[l].row0 = 0x11;
+        animations[2].frames[0].layers[l].row1 = 0x0A;
+        animations[2].frames[0].layers[l].row2 = 0x04;
+        animations[2].frames[0].layers[l].row3 = 0x0A;
+        animations[2].frames[0].layers[l].row4 = 0x11;
+    }
 
-			//Frame 2
-	for(int l=0;l<5;l++){
-		animations[2].frames[3].layers[l].index = (1<<l);
-		animations[2].frames[3].layers[l].row0 = 0x02;
-		animations[2].frames[3].layers[l].row1 = 0x14;
-		animations[2].frames[3].layers[l].row2 = 0x0E;
-		animations[2].frames[3].layers[l].row3 = 0x05;
-		animations[2].frames[3].layers[l].row4 = 0x08;
-	}
-	/*END ANIMATION_WALL*/
+    //Frame 1
+    for(int l=0;l<5;l++){
+        animations[2].frames[1].layers[l].index = (1<<l);
+        animations[2].frames[1].layers[l].row0 = 0x08;
+        animations[2].frames[1].layers[l].row1 = 0x05;
+        animations[2].frames[1].layers[l].row2 = 0x0E;
+        animations[2].frames[1].layers[l].row3 = 0x14;
+        animations[2].frames[1].layers[l].row4 = 0x02;
+    }
+
+    //Frame 2
+    for(int l=0;l<5;l++){
+        animations[2].frames[2].layers[l].index = (1<<l);
+        animations[2].frames[2].layers[l].row0 = 0x04;
+        animations[2].frames[2].layers[l].row1 = 0x04;
+        animations[2].frames[2].layers[l].row2 = 0x1F;
+        animations[2].frames[2].layers[l].row3 = 0x04;
+        animations[2].frames[2].layers[l].row4 = 0x04;
+    }
+
+    //Frame 2
+    for(int l=0;l<5;l++){
+        animations[2].frames[3].layers[l].index = (1<<l);
+        animations[2].frames[3].layers[l].row0 = 0x02;
+        animations[2].frames[3].layers[l].row1 = 0x14;
+        animations[2].frames[3].layers[l].row2 = 0x0E;
+        animations[2].frames[3].layers[l].row3 = 0x05;
+        animations[2].frames[3].layers[l].row4 = 0x08;
+    }
+    /*END ANIMATION_WALL*/
 
 
 }
 
 frame get_next_frame(animation *a){
-	int index = (a->currentFrame + 1) % a->length;
-	a->currentFrame = index;
+    int index = (a->currentFrame + 1) % a->length;
+    a->currentFrame = index;
 
-	return a->frames[index];
+    return a->frames[index];
 }
 
 void fill_random_noise(frame *f){
-	for(int i=0;i<5;i++){
-		f->layers[i].index = (1<<i);
-		f->layers[i].row0 = (random()*1000) % 0x1F;
-		f->layers[i].row1 = (random()*1000) % 0x1F;
-		f->layers[i].row2 = (random()*1000) % 0x1F;
-		f->layers[i].row3 = (random()*1000) % 0x1F;
-		f->layers[i].row4 = (random()*1000) % 0x1F;
-	}
+    for(int i=0;i<5;i++){
+        f->layers[i].index = (1<<i);
+        f->layers[i].row0 = (random()*1000) % 0x1F;
+        f->layers[i].row1 = (random()*1000) % 0x1F;
+        f->layers[i].row2 = (random()*1000) % 0x1F;
+        f->layers[i].row3 = (random()*1000) % 0x1F;
+        f->layers[i].row4 = (random()*1000) % 0x1F;
+    }
+}
+
+void initParticles(){
+    
+    for (int i=0;i<MAXPARTICLES;i++){
+        particles[i].ttl = 0;
+        particles[i].vx = 0;
+        particles[i].vy = 1;
+        particles[i].vz = 1;
+    }
+}
+
+void processParticles(int k){
+    //centerX = k % 5;
+    //centerY = k % 5;
+
+    /**** CREATE CUBE ******/
+    mat[centerX][centerY][centerZ] = 1;
+    mat[centerX+1][centerY][centerZ] = 1;
+    mat[centerX][centerY+1][centerZ] = 1;
+    mat[centerX+1][centerY+1][centerZ] = 1;
+    mat[centerX][centerY][centerZ+1] = 1;
+    mat[centerX+1][centerY][centerZ+1] = 1;
+    mat[centerX][centerY+1][centerZ+1] = 1;
+    mat[centerX+1][centerY+1][centerZ+1] = 1;
+
+
+    for (int i=0;i<MAXPARTICLES;i++){
+        particles[i].ttl = particles[i].ttl-1;
+
+        if (particles[i].ttl > 0){
+            particles[i].x += particles[i].vx;
+            particles[i].y += particles[i].vy;
+            particles[i].z += particles[i].vz;
+
+            if (    (centerX+particles[i].x < 5)
+                    &&  (centerY+particles[i].y < 5)
+                    &&  (centerZ+particles[i].z < 5)
+                    &&  (centerX+particles[i].x >= 0)
+                    &&  (centerY+particles[i].y >= 0)
+                    &&  (centerZ+particles[i].z >= 0)
+                    )
+                mat[centerX+particles[i].x][centerY+particles[i].y][centerZ+particles[i].z] = 1;
+        } else {
+            if (rand()%100 < 30){
+                particles[i].ttl = 5;
+                particles[i].x = emitX;
+                particles[i].y = emitY;
+                particles[i].z = emitZ;
+
+                particles[i].vx = rand()%3-1;
+                particles[i].vy = rand()%3-1;
+                particles[i].vz = rand()%3-1;
+
+                if (    (centerX+particles[i].x < 5)
+                        &&  (centerY+particles[i].y < 5)
+                        &&  (centerZ+particles[i].z < 5)
+                        &&  (centerX+particles[i].x >= 0)
+                        &&  (centerY+particles[i].y >= 0)
+                        &&  (centerZ+particles[i].z >= 0)
+                        )
+                    mat[centerX+particles[i].x][centerY+particles[i].y][centerZ+particles[i].z] = 1;
+            }
+        }
+    }
 }
 
 /* ------------------------------------------------------------------------- */
