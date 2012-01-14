@@ -13,9 +13,9 @@ ADD_DEFINITIONS(-Wall -std=gnu99)
 set (CMAKE_BUILD_TYPE "Release")
 
 set (CMAKE_C_FLAGS_DEBUG "-g -O0")
-set (CMAKE_C_FLAGS_RELEASE "-march=native -O2")
+set (CMAKE_C_FLAGS_RELEASE " -O2")
 set (CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-set (CMAKE_CXX_FLAGS_RELEASE "-march=native -O2")
+set (CMAKE_CXX_FLAGS_RELEASE " -O2")
 
 
 #create the executable
